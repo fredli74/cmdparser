@@ -126,25 +126,25 @@ func Parse() error {
 						if err != nil {
 							return errors.New("Invalid value set for option " + pair[0] + ": \"" + pair[1] + "\" is not a boolean")
 						}
-						option.Value = b
+						option.Value = bool(b)
 					} else {
 						option.Value = true
 					}
 				case int:
 					if len(pair) == 2 {
-						i, err := int(strconv.ParseInt(pair[1], 10, 32))
+						i, err := strconv.ParseInt(pair[1], 10, 32)
 						if err != nil {
 							return errors.New("Invalid value set for option " + pair[0] + ": \"" + pair[1] + "\" is not a valid integer")
 						}
-						option.Value = i
+						option.Value = int(i)
 					} else {
 						option.Value = option.Default
 					}
 				case string:
 					if len(pair) == 2 {
-						option.Value = pair[1]
+						option.Value = string(pair[1])
 					} else {
-						option.Value = option.Default
+						option.Value = option.Default.(string)
 					}
 				case []string:
 					if len(pair) == 2 {

@@ -132,7 +132,7 @@ func Parse() error {
 					}
 				case int:
 					if len(pair) == 2 {
-						i, err := strconv.ParseInt(pair[1], 10, 32)
+						i, err := int(strconv.ParseInt(pair[1], 10, 32))
 						if err != nil {
 							return errors.New("Invalid value set for option " + pair[0] + ": \"" + pair[1] + "\" is not a valid integer")
 						}
@@ -300,6 +300,9 @@ type CmdOption struct {
 	order int
 }
 
+func (c *CmdOption) Int() int {
+	return c.Value.(int)
+}
 func (c *CmdOption) String() string {
 	return fmt.Sprintf("%v", c.Value)
 }

@@ -1,6 +1,8 @@
+// golang function based command parser
 package cmdparser
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,33 +19,23 @@ const (
 	Hidden
 )
 
-var Option map[string]*CmdOption
-var Command map[string]*CmdCommand
+const (
+	defaultCommand = ""
+)
+
 var Args []string
 var Title string
 var OptionsFile string
-var RequireCommand bool
-var SaveOptions func(map[string]interface{}) error
 
 var commandName string
-var commandList []CmdCommand
-var optionList []CmdOption
+var commandList []*CmdCommand
+var optionList []*CmdOption
 
 func init() {
-	Option = make(map[string]*CmdOption)
-	Command = make(map[string]*CmdCommand)
 	commandName = filepath.Base(os.Args[0])
 }
 
-func AddCommand(cmd string, help string, function func()) {
-	commandList = append(commandList, CmdCommand{Command: cmd, Help: help, Function: function})
-	Command[cmd] = &commandList[len(commandList)-1]
-}
-
-func AddOption(name string, cmd string, help string, defaultValue interface{}, flags int) {
-	optionList = append(optionList, CmdOption{Name: name, Group: cmd, Help: help, Value: defaultValue, Default: defaultValue, Flags: flags})
-	Option[name] = &optionList[len(optionList)-1]
-}
+/************************************* Core Functions  *************************************/
 
 func Usage() {
 	if Title != "" {
@@ -53,27 +45,61 @@ func Usage() {
 	for _, n := range commandList {
 		fmt.Printf("  %s [options] %s %s\n", commandName, n.Command, n.Help)
 	}
+
+	printOption := func(n *CmdOption) {
+		fmt.Printf("  -%s", n.Name)
+		if n.Format != "" {
+			fmt.Printf("=%s", n.Format)
+		}
+		fmt.Printf("\n        %s", n.Help)
+		if n.Flags&Preference > 0 {
+			fmt.Printf(" (*)")
+		}
+		switch n.Value.(type) {
+		case *boolOption:
+			if n.Default == "true" {
+				fmt.Printf(" (default ON)")
+			}
+		default:
+			if n.Default != "" {
+				fmt.Printf(" (default %s)", n.Default)
+			}
+		}
+		fmt.Print("\n")
+	}
 	fmt.Println("\nOptions:")
 	for _, n := range optionList {
-		if n.Flags&Hidden == 0 {
-			fmt.Printf("  -%s\n        %s", n.Name, n.Help)
-			if n.Flags&Preference > 0 {
-				fmt.Printf(" (*)")
-			}
-			if n.DefaultString() != "" {
-				fmt.Printf(" (default %s)", n.DefaultString())
-			}
-			fmt.Print("\n")
+		if n.Flags&Hidden == 0 && n.Group == "" {
+			printOption(n)
 		}
 	}
 	if OptionsFile != "" {
-		fmt.Printf("  -save-options\n        Save (*) options to %s\n", OptionsFile)
+		fmt.Printf("\n  -save-options\n        Save (*) options to %s\n", OptionsFile)
+		fmt.Printf("  -show-options\n        Show saved options\n")
 	}
+	fmt.Println()
+	for _, g := range commandList {
+		if g.Command != "" {
+			var printedHeader bool
+			for _, n := range optionList {
+				if n.Flags&Hidden == 0 && n.Group == g.Command {
+					if !printedHeader {
+						fmt.Printf("%s options:\n", g.Command)
+						printedHeader = true
+					}
+					printOption(n)
+				}
+			}
+		}
+	}
+
 }
 
 func Parse() error {
 	if OptionsFile != "" {
-		loadOptions(OptionsFile)
+		if err := loadOptions(OptionsFile); err != nil {
+			return err
+		}
 	}
 
 	var stopParsing bool
@@ -92,129 +118,116 @@ func Parse() error {
 			doShow = true
 		} else if !stopParsing && os.Args[i][0] == '-' {
 			pair := strings.Split(os.Args[i][1:], "=")
-			option := Option[pair[0]]
+			var option *CmdOption
+			for _, o := range optionList {
+				if o.Name == pair[0] {
+					option = o
+					break
+				}
+			}
 			if option == nil {
 				return errors.New("Invalid option -" + pair[0])
 			}
-			switch option.Value.(type) {
-			case bool:
-				if len(pair) < 2 && i < len(os.Args)-1 && os.Args[i+1][0] != '-' {
-					_, err := strconv.ParseBool(os.Args[i+1])
-					if err == nil {
-						i++
-						pair = append(pair, os.Args[i])
-					}
-				}
-				if len(pair) == 2 {
-					b, err := strconv.ParseBool(pair[1])
-					if err != nil {
-						return errors.New("Invalid value set for option " + pair[0] + ": \"" + pair[1] + "\" is not a boolean")
-					}
-					option.Value = b
-				} else {
-					option.Value = true
-				}
-			default:
-				if len(pair) < 2 && i < len(os.Args)-1 && os.Args[i+1][0] != '-' {
-					i++
-					pair = append(pair, os.Args[i])
-				}
+
+			if len(pair) < 2 {
 				switch option.Value.(type) {
-				case bool:
-					if len(pair) == 2 {
-						b, err := strconv.ParseBool(pair[1])
-						if err != nil {
-							return errors.New("Invalid value set for option " + pair[0] + ": \"" + pair[1] + "\" is not a boolean")
+				case *boolOption: // Special bool handling because a bool does not need a cmd line value
+					if i < len(os.Args)-1 && os.Args[i+1][0] != '-' {
+						if _, err := strconv.ParseBool(os.Args[i+1]); err != nil {
+							pair = append(pair, "true")
+						} else {
+							i++
+							pair = append(pair, os.Args[i])
 						}
-						option.Value = bool(b)
 					} else {
-						option.Value = true
-					}
-				case int:
-					if len(pair) == 2 {
-						i, err := strconv.ParseInt(pair[1], 10, 32)
-						if err != nil {
-							return errors.New("Invalid value set for option " + pair[0] + ": \"" + pair[1] + "\" is not a valid integer")
-						}
-						option.Value = int(i)
-					} else {
-						option.Value = option.Default
-					}
-				case string:
-					if len(pair) == 2 {
-						option.Value = string(pair[1])
-					} else {
-						option.Value = option.Default.(string)
-					}
-				case []string:
-					if len(pair) == 2 {
-						if option.FromPref {
-							option.Value = make([]string, 0)
-						}
-						option.Value = append(option.Value.([]string), pair[1])
-					} else {
-						option.Value = option.Default
+						pair = append(pair, "true")
 					}
 				default:
-					return errors.New("Option value type not supported")
+					if i < len(os.Args)-1 && os.Args[i+1][0] != '-' {
+						i++
+						pair = append(pair, os.Args[i])
+					} else {
+						pair = append(pair, option.Default)
+					}
 				}
 			}
-			option.FromPref = false
+
+			if len(pair) == 2 {
+				if option.FromPref {
+					option.Value.Reset()
+					option.FromPref = false
+				}
+				if err := option.Value.Set(pair[1]); err != nil {
+					return errors.New(fmt.Sprintf("Invalid value set for option %s: \"%s\" (%s)", pair[0], pair[1], err.Error()))
+				}
+				option.doChange()
+			}
 		} else {
 			Args = append(Args, os.Args[i])
 		}
 	}
 
-	if doSave {
-		_, err := saveOptions(OptionsFile)
-		if err != nil {
-			return err
-		}
-		fmt.Println("Options saved to " + OptionsFile)
-	} else if doShow {
+	if doShow {
 		js, err := jsonOptions()
 		if err != nil {
 			return err
 		}
 		fmt.Println(string(js))
 	} else {
-
-		if Command[""] == nil {
-			if len(Args) < 2 {
-				Usage()
-				return errors.New("Missing required command")
-			} else if Command[Args[1]] == nil {
-				return errors.New(Args[1] + " is not a valid command")
+		/*for _, n := range optionList {
+			if (*n).Function != nil {
+				(*n).Function()
 			}
-		}
+		}*/
 
-		for _, n := range Option {
-			if n.Flags&Required > 0 && !n.IsSet() {
-				return errors.New("Missing required option -" + n.Name)
+		if doSave {
+			_, err := saveOptions(OptionsFile)
+			if err != nil {
+				return err
 			}
-		}
+			fmt.Println("Options saved to " + OptionsFile)
+		} else {
+			var command *CmdCommand
+			for _, c := range commandList {
+				if (len(Args) > 1 && c.Command == Args[1]) || c.Command == defaultCommand {
+					command = c
+					if c.Command != "" {
+						break
+					}
+				}
+			}
+			if command != nil {
+				for _, n := range optionList {
+					if n.Flags&Required > 0 && n.Value.String() == n.Default {
+						return errors.New("Missing required option -" + n.Name)
+					}
+				}
 
-		if len(Args) > 1 && Command[Args[1]] != nil && Command[Args[1]].Function != nil {
-			Command[Args[1]].Function()
-		} else if Command[""] != nil && Command[""].Function != nil {
-			Command[""].Function()
+				if command.Function != nil {
+					command.Function()
+				}
+
+			} else {
+				if len(Args) < 2 {
+					Usage()
+					return errors.New("Missing required command")
+				} else {
+					return errors.New(Args[1] + " is not a valid command")
+				}
+			}
 		}
 	}
 	return nil
 }
 
+/************************************* Preferences Functions  *************************************/
+
 func jsonOptions() ([]byte, error) {
 	optionMap := make(map[string]interface{})
-	for _, v := range Option {
-		if (v.Flags&Preference > 0) && v.String() != v.DefaultString() {
-			optionMap[v.Name] = v.Value
-		}
-	}
-
-	if SaveOptions != nil {
-		err := SaveOptions(optionMap)
-		if err != nil {
-			return nil, err
+	for _, v := range optionList {
+		if (v.Flags&Preference > 0) && v.Value.String() != v.Default {
+			v.doSave()
+			optionMap[v.Name] = v.Value.Get()
 		}
 	}
 
@@ -245,7 +258,7 @@ func saveOptions(name string) (string, error) {
 func loadOptions(name string) error {
 	file, err := os.OpenFile(name, os.O_RDONLY, 0700)
 	if err != nil {
-		return err
+		return nil
 	}
 	defer file.Close()
 
@@ -254,26 +267,26 @@ func loadOptions(name string) error {
 		return err
 	}
 
-	for n, v := range optionMap {
-		o := Option[n]
-		if o != nil {
+	for _, o := range optionList {
+		if v := optionMap[o.Name]; v != nil {
 			switch t := v.(type) {
 			case nil: // for JSON null
 			// skip
 			case map[string]interface{}: // for JSON objects
 			// not implemented
 			case []interface{}: // for JSON arrays
-				o.Value = make([]string, 0)
+				o.Value.Reset()
 				for _, s := range t {
-					// TODO: add different array types
-					o.Value = append(o.Value.([]string), s.(string))
+					if err := o.Value.Set(s.(string)); err != nil {
+						return err
+					}
 				}
-			case string: // for JSON strings
-				o.Value = t
-			case float64: // for JSON numbers
-				o.Value = int(t)
-			case bool: // for JSON booleans
-				o.Value = t
+				o.doChange()
+			default:
+				if err := o.Value.Set(fmt.Sprintf("%v", t)); err != nil {
+					return err
+				}
+				o.doChange()
 			}
 			o.FromPref = true
 		}
@@ -281,38 +294,146 @@ func loadOptions(name string) error {
 	return nil
 }
 
+/************************************* Commands *************************************/
+
 type CmdCommand struct {
 	Command  string
 	Help     string
 	Function func()
-	order    int
 }
+
+func Command(cmd string, help string, function func()) *CmdCommand {
+	c := CmdCommand{Command: cmd, Help: help, Function: function}
+	commandList = append(commandList, &c)
+	return &c
+}
+
+/************************************* Options *************************************/
 
 type CmdOption struct {
 	Name     string
 	Group    string
+	Format   string
 	Help     string
-	Value    interface{}
-	Default  interface{}
+	Value    optionValue
+	Default  string
 	FromPref bool
 	Flags    int
-
-	order int
+	onChange func()
+	onSave   func()
 }
 
-func (c *CmdOption) Int() int {
-	return c.Value.(int)
+type optionValue interface {
+	String() string
+	Reset()
+	Get() interface{}
+	Set(string) error
 }
-func (c *CmdOption) String() string {
-	return fmt.Sprintf("%v", c.Value)
+
+func (c *CmdOption) OnChange(f func()) *CmdOption {
+	c.onChange = f
+	return c
 }
-func (c *CmdOption) DefaultString() string {
-	return fmt.Sprintf("%v", c.Default)
+func (c *CmdOption) OnSave(f func()) *CmdOption {
+	c.onSave = f
+	return c
 }
-func (c *CmdOption) IsSet() bool {
-	return c.String() != c.DefaultString()
+func (c *CmdOption) doChange() {
+	if c.onChange != nil {
+		c.onChange()
+	}
 }
-func (c *CmdOption) Set(val interface{}) {
-	c.Value = val
-	c.FromPref = false
+func (c *CmdOption) doSave() {
+	if c.onSave != nil {
+		c.onSave()
+	}
+}
+
+type boolOption bool
+
+func (b *boolOption) String() string   { return fmt.Sprintf("%v", *b) }
+func (b *boolOption) Reset()           { *b = false }
+func (b *boolOption) Get() interface{} { return bool(*b) }
+func (b *boolOption) Set(s string) error {
+	v, err := strconv.ParseBool(s)
+	*b = boolOption(v)
+	return err
+}
+
+type intOption int64
+
+func (i *intOption) String() string   { return fmt.Sprintf("%v", *i) }
+func (i *intOption) Reset()           { *i = 0 }
+func (i *intOption) Get() interface{} { return int64(*i) }
+func (i *intOption) Set(s string) error {
+	v, err := strconv.ParseInt(s, 0, 64)
+	*i = intOption(v)
+	return err
+}
+
+type floatOption float64
+
+func (f *floatOption) String() string   { return fmt.Sprintf("%v", *f) }
+func (f *floatOption) Reset()           { *f = 0 }
+func (f *floatOption) Get() interface{} { return float64(*f) }
+func (f *floatOption) Set(s string) error {
+	v, err := strconv.ParseFloat(s, 64)
+	*f = floatOption(v)
+	return err
+}
+
+type stringOption string
+
+func (s *stringOption) String() string   { return fmt.Sprintf("%s", *s) }
+func (s *stringOption) Reset()           { *s = "" }
+func (s *stringOption) Get() interface{} { return string(*s) }
+func (s *stringOption) Set(v string) error {
+	*s = stringOption(v)
+	return nil
+}
+
+type stringListOption []string
+
+func (s *stringListOption) String() string   { j, _ := json.Marshal([]string(*s)); return string(j) }
+func (s *stringListOption) Reset()           { *s = nil }
+func (s *stringListOption) Get() interface{} { return []string(*s) }
+func (s *stringListOption) Set(v string) error {
+	*s = append(*s, v)
+	return nil
+}
+
+type byteOption []byte
+
+func (b *byteOption) String() string   { return base64.StdEncoding.EncodeToString(*b) }
+func (b *byteOption) Reset()           { *b = nil }
+func (b *byteOption) Get() interface{} { return []byte(*b) }
+func (b *byteOption) Set(s string) error {
+	v, err := base64.StdEncoding.DecodeString(s)
+	*b = byteOption(v)
+	return err
+}
+
+func addOption(name string, cmd string, format string, help string, variable optionValue, flags int) *CmdOption {
+	o := CmdOption{Name: name, Group: cmd, Format: format, Help: help, Value: variable, Default: variable.String(), Flags: flags}
+	optionList = append(optionList, &o)
+	return &o
+}
+
+func BoolOption(name string, cmd string, help string, variable *bool, flags int) *CmdOption {
+	return addOption(name, cmd, "", help, (*boolOption)(variable), flags)
+}
+func IntOption(name string, cmd string, format string, help string, variable *int64, flags int) *CmdOption {
+	return addOption(name, cmd, format, help, (*intOption)(variable), flags)
+}
+func FloatOption(name string, cmd string, format string, help string, variable *float64, flags int) *CmdOption {
+	return addOption(name, cmd, format, help, (*floatOption)(variable), flags)
+}
+func StringOption(name string, cmd string, format string, help string, variable *string, flags int) *CmdOption {
+	return addOption(name, cmd, format, help, (*stringOption)(variable), flags)
+}
+func StringListOption(name string, cmd string, format string, help string, variable *[]string, flags int) *CmdOption {
+	return addOption(name, cmd, format, help, (*stringListOption)(variable), flags)
+}
+func ByteOption(name string, cmd string, format string, help string, variable *[]byte, flags int) *CmdOption {
+	return addOption(name, cmd, format, help, (*byteOption)(variable), flags)
 }

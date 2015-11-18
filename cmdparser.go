@@ -153,12 +153,12 @@ func Parse() error {
 			}
 
 			if len(pair) == 2 {
-				if option.FromPref {
+				if pair[1] == "" {
 					option.Value.Reset()
-					option.FromPref = false
-				}
-				if err := option.Value.Set(pair[1]); err != nil {
-					return errors.New(fmt.Sprintf("Invalid value set for option %s: \"%s\" (%s)", pair[0], pair[1], err.Error()))
+				} else {
+					if err := option.Value.Set(pair[1]); err != nil {
+						return errors.New(fmt.Sprintf("Invalid value set for option %s: \"%s\" (%s)", pair[0], pair[1], err.Error()))
+					}
 				}
 				option.doChange()
 			}
@@ -288,7 +288,6 @@ func loadOptions(name string) error {
 				}
 				o.doChange()
 			}
-			o.FromPref = true
 		}
 	}
 	return nil
@@ -317,7 +316,6 @@ type CmdOption struct {
 	Help     string
 	Value    optionValue
 	Default  string
-	FromPref bool
 	Flags    int
 	onChange func()
 	onSave   func()
@@ -394,7 +392,14 @@ func (s *stringOption) Set(v string) error {
 
 type stringListOption []string
 
-func (s *stringListOption) String() string   { j, _ := json.Marshal([]string(*s)); return string(j) }
+func (s *stringListOption) String() string {
+	if *s == nil {
+		return ""
+	} else {
+		j, _ := json.Marshal([]string(*s))
+		return string(j)
+	}
+}
 func (s *stringListOption) Reset()           { *s = nil }
 func (s *stringListOption) Get() interface{} { return []string(*s) }
 func (s *stringListOption) Set(v string) error {

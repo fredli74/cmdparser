@@ -60,6 +60,8 @@ func Usage() {
 			if n.Default == "true" {
 				fmt.Printf(" (default ON)")
 			}
+		case *stringListOption:
+			// Dont show it
 		default:
 			if n.Default != "" {
 				fmt.Printf(" (default %s)", n.Default)
@@ -141,6 +143,13 @@ func Parse() error {
 						}
 					} else {
 						pair = append(pair, "true")
+					}
+				case *stringListOption:
+					if i < len(os.Args)-1 && os.Args[i+1][0] != '-' {
+						i++
+						pair = append(pair, os.Args[i])
+					} else {
+						option.Value.(*stringListOption).FromString(option.Default)
 					}
 				default:
 					if i < len(os.Args)-1 && os.Args[i+1][0] != '-' {
@@ -266,12 +275,11 @@ func loadOptions(name string) error {
 	if err := json.NewDecoder(file).Decode(&optionMap); err != nil {
 		return err
 	}
-
 	for _, o := range optionList {
-		if v := optionMap[o.Name]; v != nil {
+		if v, ok := optionMap[o.Name]; ok {
 			switch t := v.(type) {
 			case nil: // for JSON null
-			// skip
+				o.Value.Reset()
 			case map[string]interface{}: // for JSON objects
 			// not implemented
 			case []interface{}: // for JSON arrays
@@ -399,6 +407,9 @@ func (s *stringListOption) String() string {
 		j, _ := json.Marshal([]string(*s))
 		return string(j)
 	}
+}
+func (s *stringListOption) FromString(v string) error {
+	return json.Unmarshal([]byte(v), s)
 }
 func (s *stringListOption) Reset()           { *s = nil }
 func (s *stringListOption) Get() interface{} { return []string(*s) }

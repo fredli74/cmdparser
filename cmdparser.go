@@ -76,8 +76,11 @@ func Usage() {
 		}
 	}
 	if OptionsFile != "" {
-		fmt.Printf("\n  -save-options\n        Save (*) options to %s\n", OptionsFile)
-		fmt.Printf("  -show-options\n        Show saved options\n")
+		fmt.Printf("\n  -saveoptions\n        Save (*) options to %s\n", OptionsFile)
+		fmt.Printf("  -showoptions\n        Show saved options\n")
+	}
+	if Title != "" {
+		fmt.Println("  -version\n        Show current version")
 	}
 	fmt.Println()
 	for _, g := range commandList {
@@ -112,11 +115,18 @@ func Parse() error {
 		if !stopParsing && (os.Args[i] == "-?" || os.Args[i] == "-h" || os.Args[i] == "-H") {
 			Usage()
 			return nil
+		} else if !stopParsing && (os.Args[i] == "-version") {
+			if Title != "" {
+				fmt.Println(Title)
+			} else {
+				fmt.Println("No title has been set")
+			}
+			return nil
 		} else if !stopParsing && os.Args[i] == "--" {
 			stopParsing = true
-		} else if !stopParsing && os.Args[i] == "-save-options" {
+		} else if !stopParsing && os.Args[i] == "-saveoptions" {
 			doSave = true
-		} else if !stopParsing && os.Args[i] == "-show-options" {
+		} else if !stopParsing && os.Args[i] == "-showoptions" {
 			doShow = true
 		} else if !stopParsing && os.Args[i][0] == '-' {
 			pair := strings.Split(os.Args[i][1:], "=")

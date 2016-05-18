@@ -124,9 +124,9 @@ func Parse() error {
 			return nil
 		} else if !stopParsing && os.Args[i] == "--" {
 			stopParsing = true
-		} else if !stopParsing && os.Args[i] == "-saveoptions" {
+		} else if !stopParsing && OptionsFile != "" && os.Args[i] == "-saveoptions" {
 			doSave = true
-		} else if !stopParsing && os.Args[i] == "-showoptions" {
+		} else if !stopParsing && OptionsFile != "" && os.Args[i] == "-showoptions" {
 			doShow = true
 		} else if !stopParsing && os.Args[i][0] == '-' {
 			pair := strings.Split(os.Args[i][1:], "=")

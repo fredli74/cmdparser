@@ -6,7 +6,7 @@ Package cmdparser implements a function based command parser for golang
 
 ## Usage
 
-    import "github.com/fredli74/cmdparser"
+	import "github.com/fredli74/cmdparser"
 
 ### Example
 ```go
@@ -17,10 +17,10 @@ Package cmdparser implements a function based command parser for golang
 	cmdparser.OptionsFile = filepath.Join(cmdparser.UserHomeFolder(), "options.json")
 
 	// Setup a bool option
-    var beVerbose bool
-    cmdparse.BoolOption("verbose", "", "Show verbose output", &beVerbose, cmdparse.Preference)
+	var beVerbose bool
+	cmdparse.BoolOption("verbose", "", "Show verbose output", &beVerbose, cmdparse.Preference)
 
-    // Define the default command
+	// Define the default command
 	cmdparse.Command("", "", func() { // Default
 		fmt.Printf("Verbose option is %v\n", beVerbose)
 	})
@@ -135,10 +135,10 @@ variable pointer and flags Boolean option uses the strconv.ParseBool function an
 accepts 1, t, T, TRUE, true, True, 0, f, F, FALSE, false, False. Any other value
 returns an error. Specifying a boolean option on commandline with no value is
 the same as true
-
-    var beVerbose bool
-    cmdparse.BoolOption("verbose", "", "Show verbose output", &beVerbose, cmdparse.Preference)
-
+```go
+	var beVerbose bool
+	cmdparse.BoolOption("verbose", "", "Show verbose output", &beVerbose, cmdparse.Preference)
+```
 #### func  ByteOption
 
 ```go
@@ -147,10 +147,10 @@ func ByteOption(name string, cmd string, format string, help string, variable *[
 ByteOption adds a byte option with the specified name, command group, help text,
 variable pointer and flags Byte options uses base64 standard encoding when
 specified on commandline and saving/loading from options file.
-
-      var accesskey []byte
-    	 cmdparse.ByteOption("accesskey", "", "", "Client accesskey", &accesskey, cmdparse.Preference|cmdparse.Hidden)
-
+```go
+	var accesskey []byte
+	cmdparse.ByteOption("accesskey", "", "", "Client accesskey", &accesskey, cmdparse.Preference|cmdparse.Hidden)
+```
 #### func  FloatOption
 
 ```go
@@ -160,10 +160,10 @@ FloatOption adds a float option with the specified name, command group, help
 text, variable pointer and flags Float options uses the 64 bit
 strconv.ParseFloat function and accepts a well-formed floating point number that
 is rounded using IEEE754 unbiased rounding.
-
-    var q float64
-    cmdparse.FloatOption("q", "", "<value>", "Sets the filter q value", &q, cmdparse.Standard)
-
+```go
+	var q float64
+	cmdparse.FloatOption("q", "", "<value>", "Sets the filter q value", &q, cmdparse.Standard)
+```
 #### func  IntOption
 
 ```go
@@ -173,10 +173,10 @@ IntOption adds an integer option with the specified name, command group, help
 text, variable pointer and flags Integer options uses the 64 bit
 strconv.ParseInt function and accepts "0x" prefix for base 16, "0" prefix for
 base 8 and uses base 10 otherwise.
-
-    var size int64
-    cmdparse.IntOption("size", "truncate", "<MiB>", "Size to truncate to", &size, cmdparse.Preference|cmdparse.Required)
-
+```go
+	var size int64
+	cmdparse.IntOption("size", "truncate", "<MiB>", "Size to truncate to", &size, cmdparse.Preference|cmdparse.Required)
+```
 #### func  StringListOption
 
 ```go
@@ -188,10 +188,11 @@ commandline will add that string to the internal list. There is no way to remove
 strings from the list from commandline except resetting the list by specifying
 an empty value. StringList options uses json.Unmarshal to format json type
 arrays when saving and loading to options file.
-
-    var IgnoreList []string
-    cmdparse.StringListOption("ignore", "copy", "<pattern>", "Ignore files matching pattern", &IgnoreList, cmdparse.Standard|cmdparse.Preference)
-
+```go
+	var IgnoreList []string
+	cmdparse.StringListOption("ignore", "copy", "<pattern>", "Ignore files matching pattern", &IgnoreList,
+	cmdparse.Standard|cmdparse.Preference)
+```
 #### func  StringOption
 
 ```go
@@ -199,10 +200,10 @@ func StringOption(name string, cmd string, format string, help string, variable 
 ```
 StringOption adds a string option with the specified name, command group, help
 text, variable pointer and flags
-
-    var serverAddr string
-    cmdparse.StringOption("server", "", "<ip>:<port>", "Server address", &serverAddr, cmdparse.Preference|cmdparse.Required)
-
+```go
+	var serverAddr string
+	cmdparse.StringOption("server", "", "<ip>:<port>", "Server address", &serverAddr, cmdparse.Preference|cmdparse.Required)
+```
 #### func (*CmdOption) OnChange
 
 ```go
@@ -210,28 +211,28 @@ func (c *CmdOption) OnChange(f func()) *CmdOption
 ```
 OnChange is a hook called when an option value has been set This can be used to
 convert option values
-
-    var sizeMB int64
-    var byteSize int64
-    cmdparse.IntOption("size", "", "<MiB>", "Set size", &sizeMB, cmdparse.Hidden|cmdparse.Preference).OnChange(func() {
-      byteSize = sizeMB * 1024 * 1024
-    })
-
+```go
+	var sizeMB int64
+	var byteSize int64
+	cmdparse.IntOption("size", "", "<MiB>", "Set size", &sizeMB, cmdparse.Hidden|cmdparse.Preference).OnChange(func() {
+		byteSize = sizeMB * 1024 * 1024
+	})
+```
 Or set related options
-
-    var accesskey []byte
-    var user string
-    var password string
-    cmdparse.ByteOption("accesskey", "", "", "Client accesskey", &accesskey, cmdparse.Preference|cmdparse.Hidden)
-    cmdparse.StringOption("user", "", "<username>", "Username", &user, cmdparse.Preference|cmdparse.Required)
-    cmdparse.StringOption("password", "", "<password>", "Password", &password, cmdparse.Standard).OnChange(func() {
-      accesskey := GenerateAccessKey(user, password)
-    }).OnSave(func() {
-      if user == "" {
-        panic(errors.New("Unable to save login unless both user and password options are specified"))
-      }
-    })
-
+```go
+	var accesskey []byte
+	var user string
+	var password string
+	cmdparse.ByteOption("accesskey", "", "", "Client accesskey", &accesskey, cmdparse.Preference|cmdparse.Hidden)
+		cmdparse.StringOption("user", "", "<username>", "Username", &user, cmdparse.Preference|cmdparse.Required)
+	cmdparse.StringOption("password", "", "<password>", "Password", &password, cmdparse.Standard).OnChange(func() {
+		accesskey := GenerateAccessKey(user, password)
+	}).OnSave(func() {
+		if user == "" {
+			panic(errors.New("Unable to save login unless both user and password options are specified"))
+		}
+	})
+```
 #### func (*CmdOption) OnSave
 
 ```go

@@ -226,7 +226,7 @@ Or set related options
 	cmdparse.ByteOption("accesskey", "", "", "Client accesskey", &accesskey, cmdparse.Preference|cmdparse.Hidden)
 	cmdparse.StringOption("user", "", "<username>", "Username", &user, cmdparse.Preference|cmdparse.Required)
 	cmdparse.StringOption("password", "", "<password>", "Password", &password, cmdparse.Standard).OnChange(func() {
-	accesskey := GenerateAccessKey(user, password)
+		accesskey := GenerateAccessKey(user, password)
 	}).OnSave(func() {
 		if user == "" {
 			panic(errors.New("Unable to save login unless both user and password options are specified"))

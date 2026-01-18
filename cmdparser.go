@@ -33,6 +33,9 @@ var Title string
 // OptionsFile sets the filename (with full path) where to load and save preference options. Setting OptionsFile enables -showoptions and -saveoptions flags.
 var OptionsFile string
 
+// ShowCurrentDefaults controls whether Usage prints current values instead of defaults.
+var ShowCurrentDefaults bool
+
 var commandName string        // Name of command to use in Usage instructions
 var commandList []*CmdCommand // Internal list of all commands
 var optionList []*CmdOption   // Internal list of all options
@@ -55,6 +58,7 @@ func Usage() {
 	}
 
 	printOption := func(n *CmdOption) {
+		currentValue := n.Value.String()
 		fmt.Printf("  -%s", n.Name)
 		if n.Format != "" {
 			fmt.Printf("=%s", n.Format)
@@ -65,13 +69,23 @@ func Usage() {
 		}
 		switch n.Value.(type) {
 		case *boolOption:
-			if n.Default == "true" {
+			if ShowCurrentDefaults {
+				if currentValue == "true" {
+					fmt.Printf(" (current ON)")
+				} else {
+					fmt.Printf(" (current OFF)")
+				}
+			} else if n.Default == "true" {
 				fmt.Printf(" (default ON)")
 			}
 		case *stringListOption:
 			// Dont show it
 		default:
-			if n.Default != "" {
+			if ShowCurrentDefaults {
+				if currentValue != "" {
+					fmt.Printf(" (current %s)", currentValue)
+				}
+			} else if n.Default != "" {
 				fmt.Printf(" (default %s)", n.Default)
 			}
 		}

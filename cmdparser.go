@@ -69,7 +69,7 @@ func Usage() {
 		}
 		switch n.Value.(type) {
 		case *boolOption:
-			if ShowCurrentDefaults {
+			if ShowCurrentDefaults && currentValue != n.Default {
 				if currentValue == "true" {
 					fmt.Printf(" (current ON)")
 				} else {
@@ -81,7 +81,7 @@ func Usage() {
 		case *stringListOption:
 			// Dont show it
 		default:
-			if ShowCurrentDefaults {
+			if ShowCurrentDefaults && currentValue != n.Default {
 				if currentValue != "" {
 					fmt.Printf(" (current %s)", currentValue)
 				}
